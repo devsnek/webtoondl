@@ -1,0 +1,26 @@
+{
+  "name": "webtoondl",
+  "version": "0.0.1",
+  "description": "Download Webtoon comics quickly and nicely",
+  "main": "index.js",
+  "bin": {
+    "webtoondl": "./webtoondl"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0-rc.2",
+    "cli-progress": "^1.7.0",
+    "pdfkit": "^0.8.3",
+    "snekfetch": "^4.0.0-rc.0",
+    "snekparse": "github:devsnek/snekparse"
+  },
+  "author": "snek",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/devsnek/webtoondl.git"
+  },
+  "bugs": {
+    "url": "https://github.com/devsnek/webtoondl/issues"
+  },
+  "homepage": "https://github.com/devsnek/webtoondl#readme"
+}

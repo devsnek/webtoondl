@@ -1,0 +1,120 @@
+#!/usr/bin/env node
+
+'use strict';
+
+/* eslint-disable no-console */
+
+const path = require('path');
+const fs = require('fs');
+const util = require('util');
+const request = require('snekfetch');
+const cheerio = require('cheerio');
+const progress = require('cli-progress');
+const PDFDocument = require('pdfkit');
+const argv = require('snekparse')(process.argv);
+
+
+const writeFileAsync = util.promisify(fs.writeFile);
+const statAsync = util.promisify(fs.stat);
+const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString()));
+
+
+(async () => {
+  const titleNo = argv.comic;
+  if (!titleNo)
+    throw new Error('Please specifiy a comic ID with --comic');
+
+  const $ = await get(`http://www.webtoons.com/en/drama/NAME/list?title_no=${titleNo}&page=1`);
+  const info = {
+    genre: $('.info .genre').text(),
+    name: $('.info .subj').text(),
+    author: $('.info .author').text().split('author info')[0],
+  };
+  const episodeCount = +$('li[data-episode-no]')[0].attribs['data-episode-no'];
+  info.episodes = episodeCount;
+  info.name = info.name.slice(0, info.name.length / 2);
+
+  console.log('Comic Selected:', `${info.name} (${info.genre}) by ${info.author}`);
+
+  const episodes = [];
+
+  const ebar = new progress.Bar({
+    format: 'Indexing Episodes [{bar}] {percentage}% | ETA: {eta}s | Episode {value}/{total}',
+  });
+  ebar.start(episodeCount, 0);
+  let eFinished = 1;
+  await Promise.all(Array.from({ length: episodeCount }, async (_, i) => {
+    const episode = {
+      id: i + 1,
+      name: `Episode ${i + 1}`,
+      links: [],
+    };
+
+    const $$ = await get(`http://www.webtoons.com/en/drama/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`);
+    const images = $$('#_imageList > img');
+    episode.links.push(...Array.from(images).map((img, id) => ({
+      link: img.attribs['data-url'].split('?')[0],
+      episode: i,
+      id: id + 1,
+    })));
+
+    episodes.push(episode);
+
+    ebar.update(eFinished++);
+  }));
+
+  ebar.stop();
+
+  episodes.sort((e1, e2) => e1.id - e2.id);
+
+  const location = path.resolve(process.cwd(), argv.out || '.');
+
+  console.log('Downloading to', location);
+
+  for (const episode of episodes) {
+    const bar = new progress.Bar({
+      format: `Downloading ${episode.name} [{bar}] {percentage}% | ETA: {eta}s | Panel {value}/{total}`,
+    });
+    bar.start(episode.links.length, 0);
+
+    if (argv.pdf) {
+      const doc = new PDFDocument({ autoFirstPage: false });
+      const out = path.resolve(location, `${episode.name}.pdf`);
+      doc.pipe(fs.createWriteStream(out));
+      const panels = [];
+      let finished = 1;
+      await Promise.all(episode.links.map(async ({ link, id }) => {
+        const buf = await request.get(link)
+          .set('Referer', 'http://www.webtoons.com')
+          .then((r) => r.raw);
+        panels.push({ buf, id });
+        bar.update(finished++);
+      }));
+      panels.sort((p1, p2) => p1.id - p2.id);
+      for (const { buf } of panels) {
+        doc.addPage({ size: [800, 1127] });
+        doc.image(buf, 0, 0);
+      }
+      doc.end();
+    } else {
+      const out = path.resolve(location, episode.name);
+      fs.mkdir(out, () => 0);
+      let finished = 1;
+      await Promise.all(episode.links.map(async ({ link, id }) => {
+        const p = path.resolve(out, `${id}.jpg`);
+        try {
+          await statAsync(p);
+        } catch (err) {
+          const buf = await request.get(link)
+            .set('Referer', 'http://www.webtoons.com')
+            .then((r) => r.raw);
+          await writeFileAsync(p, buf);
+        }
+        bar.update(finished++);
+      }));
+    }
+    bar.stop();
+  }
+
+  console.log('Finished!');
+})().catch(console.error);
