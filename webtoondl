@@ -10,14 +10,13 @@ const util = require('util');
 const request = require('snekfetch');
 const cheerio = require('cheerio');
 const progress = require('cli-progress');
-const PDFDocument = require('pdfkit');
 const argv = require('snekparse')(process.argv);
-
 
 const writeFileAsync = util.promisify(fs.writeFile);
 const statAsync = util.promisify(fs.stat);
+const accessAsync = util.promisify(fs.access);
+const mkdirAsync = util.promisify(fs.mkdir);
 const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString()));
-
 
 (async () => {
   const titleNo = argv.comic;
@@ -46,11 +45,14 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
   await Promise.all(Array.from({ length: episodeCount }, async (_, i) => {
     const episode = {
       id: i + 1,
-      name: `Episode ${i + 1}`,
+      name: undefined,
       links: [],
     };
 
     const $$ = await get(`http://www.webtoons.com/en/drama/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`);
+    const realname = $$('.subj_episode').text();
+    episode.name = `${(i + 1).toString().padStart(3, 0)} - ${realname}`;
+
     const images = $$('#_imageList > img');
     episode.links.push(...Array.from(images).map((img, id) => ({
       link: img.attribs['data-url'].split('?')[0],
@@ -69,6 +71,12 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
 
   const location = path.resolve(process.cwd(), argv.out || '.');
 
+  try {
+    await accessAsync(location);
+  } catch (err) {
+    await mkdirAsync(location);
+  }
+
   console.log('Downloading to', location);
 
   for (const episode of episodes) {
@@ -78,6 +86,7 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
     bar.start(episode.links.length, 0);
 
     if (argv.pdf) {
+      const PDFDocument = require('pdfkit');
       const doc = new PDFDocument({ autoFirstPage: false });
       const out = path.resolve(location, `${episode.name}.pdf`);
       doc.pipe(fs.createWriteStream(out));
@@ -117,4 +126,7 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
   }
 
   console.log('Finished!');
-})().catch(console.error);
+})().catch((err) => {
+  console.error(err.message);
+  process.exit(1);
+});

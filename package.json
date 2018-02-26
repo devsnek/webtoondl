@@ -1,6 +1,6 @@
 {
   "name": "webtoondl",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Download Webtoon comics quickly and nicely",
   "main": "index.js",
   "bin": {
