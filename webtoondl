@@ -49,20 +49,24 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
       links: [],
     };
 
-    const $$ = await get(`http://www.webtoons.com/en/drama/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`);
-    const realname = $$('.subj_episode').text();
-    episode.name = `${(i + 1).toString().padStart(3, 0)} - ${realname}`;
+    const $$ = await get(`http://www.webtoons.com/en/drama/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`).catch((e) => {
+      console.error(`\nError Indexing Episode ${episode.id}:`, e.message);
+    });
+    if ($$) {
+      const realname = $$('.subj_episode').text();
+      episode.name = `${(i + 1).toString().padStart(3, 0)} - ${realname}`;
 
-    const images = $$('#_imageList > img');
-    episode.links.push(...Array.from(images).map((img, id) => ({
-      link: img.attribs['data-url'].split('?')[0],
-      episode: i,
-      id: id + 1,
-    })));
+      const images = $$('#_imageList > img');
+      episode.links.push(...Array.from(images).map((img, id) => ({
+        link: img.attribs['data-url'].split('?')[0],
+        episode: i,
+        id: id + 1,
+      })));
 
-    episodes.push(episode);
+      episodes.push(episode);
 
-    ebar.update(eFinished++);
+      ebar.update(eFinished++);
+    }
   }));
 
   ebar.stop();
