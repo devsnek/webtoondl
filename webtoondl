@@ -26,7 +26,7 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
   if (!genre)
     genre='drama';
 
-  const url = `http://www.webtoons.com/en/${genre}/NAME/list?title_no=${titleNo}`; //&page=1`;
+  const url = `http://www.webtoons.com/en/${genre}/NAME/list?title_no=${titleNo}&page=1`;
   const $ = await get(url);
   const info = {
     genre: $('.info .genre').text(),
