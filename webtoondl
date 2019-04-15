@@ -22,8 +22,12 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
   const titleNo = argv.comic;
   if (!titleNo)
     throw new Error('Please specifiy a comic ID with --comic');
+  let genre = argv.genre;
+  if (!genre)
+    genre='drama';
 
-  const $ = await get(`http://www.webtoons.com/en/drama/NAME/list?title_no=${titleNo}&page=1`);
+  const url = `http://www.webtoons.com/en/${genre}/NAME/list?title_no=${titleNo}`; //&page=1`;
+  const $ = await get(url);
   const info = {
     genre: $('.info .genre').text(),
     name: $('.info .subj').text(),
@@ -42,28 +46,30 @@ const get = (url) => request.get(url).then((r) => cheerio.load(r.raw.toString())
   });
   ebar.start(episodeCount, 0);
   let eFinished = 1;
-  await Promise.all(Array.from({ length: episodeCount }, async (_, i) => {
+  for (var i = 0; i < episodeCount; i++) {
     const episode = {
       id: i + 1,
       name: undefined,
       links: [],
     };
 
-    const $$ = await get(`http://www.webtoons.com/en/drama/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`);
-    const realname = $$('.subj_episode').text();
-    episode.name = `${(i + 1).toString().padStart(3, 0)} - ${realname}`;
+    await get(`http://www.webtoons.com/en/${genre}/N/E/viewer?title_no=${titleNo}&episode_no=${episode.id}`)
+      .then($$ => {
+        const realname = $$('.subj_episode').text();
+        episode.name = `${(i + 1).toString().padStart(3, 0)} - ${realname}`;
 
-    const images = $$('#_imageList > img');
-    episode.links.push(...Array.from(images).map((img, id) => ({
-      link: img.attribs['data-url'].split('?')[0],
-      episode: i,
-      id: id + 1,
-    })));
+        const images = $$('#_imageList > img');
+        episode.links.push(...Array.from(images).map((img, id) => ({
+          link: img.attribs['data-url'].split('?')[0],
+          episode: i,
+          id: id + 1,
+        })));
 
-    episodes.push(episode);
+        episodes.push(episode);
+      }).catch(_ => { return; });
 
     ebar.update(eFinished++);
-  }));
+  }
 
   ebar.stop();
 
